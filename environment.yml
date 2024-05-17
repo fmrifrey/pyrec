@@ -1,0 +1,13 @@
+name: tvrec_env
+channels:
+  - defaults
+dependencies:
+  - python=3.9
+  - matplotlib
+  - numpy
+  - pytorch
+  - scikit-image
+  - pip
+  - numpy
+  - pip:
+    - git+https://github.com/mmuckley/torchkbnufft.git
