@@ -1,11 +1,64 @@
 import torch
 
-def tvdenoise(v, P=None, tvtype='L1', niter=100, lam=0.1):
+def tvdeblur(A_fwd, A_adj, b, tvtype='L1', niter=100, lam=0.1, L=1):
 
     # initialize variables
-    x = Variable(v.clone(), requires_grad=True)
-    y = x.clone()
+    P = None
+    cost = []
+    x_set = []
+    x = A_adj(b)
+    res = A_fwd(x) - b
+    Y = x.clone()
     t = 1.0
+
+    # loop through FISTA iterations
+    for i in range(niter):
+
+        # store old values
+        x_old = x.clone()
+        t_old = t.clone()
+
+        # calculate the gradient
+        grad = A_adj(A_fwd(Y) - b)
+        x = Y - grad/L
+
+        # total variation denoising
+        if torch.abs(lam) > 0:
+            x, P = tvdenoise(x, P, tvtype=tvtype, niter=niter, lam=lam/L)
+
+        # update step size
+        t = (1 + torch.sqrt(1 + 4 * t_old**2)) / 2
+
+        # update Y
+        Y = x + (t_old-1)/t * (x - x_old)
+
+        # calculate residual
+        res = A_fwd(x) - b
+
+        # calculate cost
+        if tvtype == 'iso':
+            cost.append(1/2*torch.norm(res)**2 + lam * tvnorm_iso(x))
+        elif tvtype == 'L1':
+            cost.append(1/2*torch.norm(res)**2 + lam * tvnorm_L1(x))
+        else:
+            raise print("error: invalid tvtype")
+
+        # save the image
+        x_set.append(x)
+
+    return x, cost, x_set
+
+def tvdenoise(v, P=None, tvtype='L1', niter=100, lam=0.1, tol=1e-5):
+    
+    # get the shape of the input tensor v
+    shape = v.shape()
+    ndim = len(shape)
+
+    # initialize variables
+    x = v.clone()
+    t = 1.0
+    R = [P_tensor.clone() for P_tensor in P]
+    D = torch.zeros_like(x)
 
     # loop through FISTA iterations
     for i in range(niter):
@@ -13,12 +66,11 @@ def tvdenoise(v, P=None, tvtype='L1', niter=100, lam=0.1):
         # store old values
         D_old = D.clone()
         P_old = P.clone()
-        x_old = x.clone()
         t_old = t.clone()
        
         # compute gradient of objective function
-        D = v - lam * L_fwd(R);
-        Q = L_adj(D);
+        D = v - lam * L_fwd(R)
+        Q = L_adj(D)
 
         # gradient descent step
         for d in range(ndim):
@@ -30,7 +82,7 @@ def tvdenoise(v, P=None, tvtype='L1', niter=100, lam=0.1):
         elif tvtype == 'L1':
             P = tvprox_L1(P)
         else:
-            print("error: invalid tvtype\n")
+            raise print("error: invalid tvtype")
 
         # update step size
         t = (1 + torch.sqrt(1 + 4 * t**2)) / 2
@@ -39,30 +91,27 @@ def tvdenoise(v, P=None, tvtype='L1', niter=100, lam=0.1):
         for d in range(ndim):
             R[d] = P[d] + (t_old - 1)/t * (P[d] - P_old[d])
 
+        # calculate residual
+        res = torch.norm(D - D_old) / torch.norm(D)
+        if res < tol:
+            break
+
     # calculate Y
     Y = v - lam * L_fwd(P)
 
     return Y, P
 
 def tvprox_iso(P):
-    
-    # initialize proximal map
-    P_prox = []
 
     # proximal mapping divides each P by rsos
-    for P_tensor in P:
-        P_prox.append(P_tensor / torch.sqrt(torch.sum(torch.pow(P_tensor2,2) for P_tensor2 in P)))
+    P_prox = [P_tensor / torch.sqrt(torch.sum(torch.pow(P_tensor2,2) for P_tensor2 in P)) for P_tensor in P]
 
     return P_prox
 
 def tvprox_L1(P):
 
-    # initialize proximal map
-    P_prox = []
-
     # proximal mapping divides each P by absolute max
-    for P_tensor in P:
-        P_prox.append(P_tensor / torch.abs(P_tensor).max())
+    P_prox = [P_tensor / torch.abs(P_tensor).max() for P_tensor in P]
     
     return P_prox
 
@@ -75,7 +124,6 @@ def tvnorm_iso(x):
     tv_norm = sum(torch.sqrt(torch.sum(torch.pow(P_tensor,2))) for P_tensor in P)
 
     return tv_norm
-
 
 def tvnorm_L1(x):
 
