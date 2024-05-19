@@ -56,7 +56,7 @@ def tvdenoise(v, P=None, tvtype='L1', niter=100, lam=0.1, tol=1e-5):
     
     # get the shape of the input tensor v
     shape = v.shape
-    ndim = len(shape)
+    ndim = len(v.squeeze().shape)
 
     # initialize variables
     x = v.clone()
