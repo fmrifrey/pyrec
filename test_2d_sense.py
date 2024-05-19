@@ -4,8 +4,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 import torch
 import torchkbnufft as tkbn
-from rec.TV_FISTA import tvdeblur
 from skimage.data import shepp_logan_phantom
+import utils.opt
+from recon.TV_FISTA import *
 
 filterwarnings("ignore") # ignore floor divide warnings
 if torch.cuda.is_available():
@@ -13,17 +14,17 @@ if torch.cuda.is_available():
 else:
     device = torch.device("cpu")
 
-# create a simple shepp logan phantom and plot it
-image = utils.phantomNd()
+# create a simple shepp logan phantom
+image = shepp_logan_phantom().astype(complex)
 im_size = image.shape
 
-# convert the phantom to a tensor and unsqueeze coil and batch dimension
-image = torch.tensor(image, device=device).unsqueeze(0).unsqueeze(0)
+image = torch.tensor(image).to(device).unsqueeze(0).unsqueeze(0)
+print('image shape: {}'.format(image.shape))
 
 # create a k-space trajectory and plot it
 spokelength = image.shape[-1] * 2
 grid_size = (spokelength, spokelength)
-nspokes = 64
+nspokes = 17
 
 ga = np.deg2rad(180 / ((1 + np.sqrt(5)) / 2))
 kx = np.zeros(shape=(spokelength, nspokes))
@@ -39,38 +40,43 @@ kx = np.transpose(kx)
 ktraj = np.stack((ky.flatten(), kx.flatten()), axis=0)
 
 # convert k-space trajectory to a tensor
-ktraj = torch.tensor(ktraj, device=device)
+ktraj = torch.tensor(ktraj).to(device)
+print('ktraj shape: {}'.format(ktraj.shape))
 
-# build nufft operators
-nufft_ob = tkbn.KbNufft(im_size=im_size, grid_size=grid_size).to(image)
-adjnufft_ob = tkbn.KbNufftAdjoint(im_size=im_size, grid_size=grid_size).to(image)
+# create NUFFT objects, use 'ortho' for orthogonal FFTs
+nufft_ob = tkbn.KbNufft(
+    im_size=im_size,
+    grid_size=grid_size,
+).to(image)
+adjnufft_ob = tkbn.KbNufftAdjoint(
+    im_size=im_size,
+    grid_size=grid_size,
+).to(image)
+
+print(nufft_ob)
+print(adjnufft_ob)
 
 # calculate k-space data
-kdata = nufft_ob(image, ktraj, smaps=None)
+kdata = nufft_ob(image, ktraj)
 
 # add some noise (robustness test)
 siglevel = torch.abs(kdata).mean()
 kdata = kdata + (siglevel/5) * torch.randn(kdata.shape).to(kdata)
 
-# convert kdata to numpy
-kdata_numpy = np.reshape(kdata.cpu().numpy(), (1, nspokes, spokelength))
-
-# adjnufft back
 # method 1: no density compensation (blurry image)
-image_blurry = adjnufft_ob(kdata, ktraj, smaps=None)
-
-# show the images, some phase errors may occur due to smap
+image_blurry = adjnufft_ob(kdata, ktraj)
 image_blurry_numpy = np.squeeze(image_blurry.cpu().numpy())
-plt.figure(0)
-plt.imshow(np.absolute(image_blurry_numpy))
-plt.gray()
-plt.title('blurry image')
-plt.show()
 
-# define fwd and adj operators for iterative recon:
+smaps = torch.rand(1, 8, 400, 400) + 1j * torch.rand(1, 8, 400, 400)
 def A_fwd(x):
-    return nufft_ob(x, ktraj)
+    x = torch.tensor(x).unsqueeze(0).unsqueeze(0)
+    return nufft_ob(x,ktraj,smaps=smaps.to(x))
 def A_adj(b):
-    return adjnufft_ob(b, ktraj, smaps=None)
+    return torch.tensor(adjnufft_ob(b,ktraj,smaps=smaps.to(image_blurry))).squeeze()
 
-image_ir = tvdeblur(A_fwd,A_adj,kdata)
+L = utils.opt.pwritr(A_fwd,A_adj,image_blurry.squeeze())
+image_tvfista, cost, x_set = tvdeblur(A_fwd, A_adj, kdata, niter=10)
+plt.figure(0)
+image_tvfista_numpy = np.squeeze(image_tvfista.cpu().numpy())
+plt.imshow(np.absolute(image_tvfista_numpy))
+plt.show()

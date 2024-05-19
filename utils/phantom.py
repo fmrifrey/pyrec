@@ -7,6 +7,10 @@ def phantomNd(N, E=None):
     if E is None:
         E = 'Modified Shepp-Logan'
 
+    # convert 2d to 3d
+    if len(N) == 2:
+        np.append(N,1)
+
     # load default head phantom
     if isinstance(E, str):
         if E.lower() == 'shepp-logan':
@@ -18,33 +22,24 @@ def phantomNd(N, E=None):
         else:
             raise ValueError(f'Invalid default phantom: {E}')
 
-    # simulate random noise along time
-    N = np.pad(N, (0, max(0, 4 - len(N))), mode='constant', constant_values=1)
-    if N[3] > 1 and E.shape[2] == 1:
-        E = E.repeat(N[3], axis=2)
-        E[:, 4:, 1:] += 0.1 * E[:, 4:, 1:] * (2 * np.random.rand(E.shape[0], 6, N[3] - 1) - 1)
-    elif N[3] != E.shape[2]:
-        raise ValueError('size(E,3) must be == Nt, or 1 to simulate random noise')
-
     # make image grid points
     x = [np.linspace(-1, 1, n) if n > 1 else np.zeros(n) for n in N[:3]]
     X, Y, Z = np.meshgrid(*x, indexing='ij')
     r = np.stack((X.flatten(), Y.flatten(), Z.flatten()), axis=0)
 
     # initialize vectorized image array
-    P = torch.zeros((r.shape[1], N[3]))
+    P = torch.zeros(r.shape[1])
 
-    for nt in range(N[3]):  # loop through time points
-        for ne in range(E.shape[0]):  # loop through ellipsoids
-            # get properties of current ellipse
-            rho = E[ne, 0, nt]  # intensity
-            D = np.diag(E[ne, 1:4, nt])  # stretch
-            rc = E[ne, 4:7, nt].reshape(-1, 1)  # center
-            R = eul2rotm(np.pi / 180 * E[ne, 7:10, nt][::-1])  # rotation
+    for ne in range(E.shape[0]):  # loop through ellipsoids
+        # get properties of current ellipse
+        rho = E[ne, 0]  # intensity
+        D = np.diag(E[ne, 1:4])  # stretch
+        rc = E[ne, 4:7].reshape(-1, 1)  # center
+        R = eul2rotm(np.pi / 180 * E[ne, 7:10][::-1])  # rotation
 
-            # determine ellipsoid ROI and add amplitude
-            ROI = torch.norm(torch.tensor(np.linalg.inv(D) @ R.T @ (r - rc)), dim=0) <= 1
-            P[ROI, nt] += rho
+        # determine ellipsoid ROI and add amplitude
+        ROI = torch.norm(torch.tensor(np.linalg.inv(D) @ R.T @ (r - rc)), dim=0) <= 1
+        P[ROI] += rho
 
     # reshape the image
     P = P.reshape(*N)
