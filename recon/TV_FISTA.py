@@ -1,8 +1,7 @@
 import torch
 import numpy as np
-import matplotlib as plt
 
-def tvdeblur(A_fwd, A_adj, b, tvtype='L1', niter=100, lam=0.1, L=1):
+def tvdeblur(A_fwd, A_adj, b, tvtype='L1', niter=100, lam=0.1, L=1, show=1):
 
     # initialize variables
     P = None

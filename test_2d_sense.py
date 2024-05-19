@@ -19,7 +19,6 @@ image = shepp_logan_phantom().astype(complex)
 im_size = image.shape
 
 image = torch.tensor(image).to(device).unsqueeze(0).unsqueeze(0)
-print('image shape: {}'.format(image.shape))
 
 # create a k-space trajectory and plot it
 spokelength = image.shape[-1] * 2
@@ -41,7 +40,6 @@ ktraj = np.stack((ky.flatten(), kx.flatten()), axis=0)
 
 # convert k-space trajectory to a tensor
 ktraj = torch.tensor(ktraj).to(device)
-print('ktraj shape: {}'.format(ktraj.shape))
 
 # create NUFFT objects, use 'ortho' for orthogonal FFTs
 nufft_ob = tkbn.KbNufft(
@@ -52,9 +50,6 @@ adjnufft_ob = tkbn.KbNufftAdjoint(
     im_size=im_size,
     grid_size=grid_size,
 ).to(image)
-
-print(nufft_ob)
-print(adjnufft_ob)
 
 # calculate k-space data
 kdata = nufft_ob(image, ktraj)
@@ -75,7 +70,7 @@ def A_adj(b):
     return torch.tensor(adjnufft_ob(b,ktraj,smaps=smaps.to(image_blurry))).squeeze()
 
 L = utils.opt.pwritr(A_fwd,A_adj,image_blurry.squeeze())
-image_tvfista, cost, x_set = tvdeblur(A_fwd, A_adj, kdata, niter=10)
+image_tvfista, cost, x_set = tvdeblur(A_fwd, A_adj, kdata, niter=2, L=L)
 plt.figure(0)
 image_tvfista_numpy = np.squeeze(image_tvfista.cpu().numpy())
 plt.imshow(np.absolute(image_tvfista_numpy))
