@@ -1,7 +1,7 @@
 import torch
 import numpy as np
 
-def tvdeblur(A_fwd, A_adj, b, tvtype='L1', niter=100, lam=0.1, L=1, show=1):
+def tvdeblur(A_fwd, A_adj, b, tvtype='L1', niter=100, lam=0.1, L=1, chat=1):
 
     # initialize variables
     P = None
@@ -46,6 +46,9 @@ def tvdeblur(A_fwd, A_adj, b, tvtype='L1', niter=100, lam=0.1, L=1, show=1):
 
         # save the image
         x_set.append(x)
+
+        if chat:
+            print("TV_FISTA.tvdeblur(): iter %d, cost = %f" % (i, cost[i]))
 
     return x, cost, x_set
 

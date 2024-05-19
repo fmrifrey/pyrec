@@ -24,7 +24,6 @@ image = torch.tensor(image).to(device).unsqueeze(0).unsqueeze(0)
 spokelength = image.shape[-1] * 2
 grid_size = (spokelength, spokelength)
 nspokes = 17
-
 ga = np.deg2rad(180 / ((1 + np.sqrt(5)) / 2))
 kx = np.zeros(shape=(spokelength, nspokes))
 ky = np.zeros(shape=(spokelength, nspokes))
@@ -32,10 +31,8 @@ ky[:, 0] = np.linspace(-np.pi, np.pi, spokelength)
 for i in range(1, nspokes):
     kx[:, i] = np.cos(ga) * kx[:, i - 1] - np.sin(ga) * ky[:, i - 1]
     ky[:, i] = np.sin(ga) * kx[:, i - 1] + np.cos(ga) * ky[:, i - 1]
-    
 ky = np.transpose(ky)
 kx = np.transpose(kx)
-
 ktraj = np.stack((ky.flatten(), kx.flatten()), axis=0)
 
 # convert k-space trajectory to a tensor
@@ -70,7 +67,7 @@ def A_adj(b):
     return torch.tensor(adjnufft_ob(b,ktraj,smaps=smaps.to(image_blurry))).squeeze()
 
 L = utils.opt.pwritr(A_fwd,A_adj,image_blurry.squeeze())
-image_tvfista, cost, x_set = tvdeblur(A_fwd, A_adj, kdata, niter=2, L=L)
+image_tvfista, cost, x_set = tvdeblur(A_fwd, A_adj, kdata, niter=500, L=L)
 plt.figure(0)
 image_tvfista_numpy = np.squeeze(image_tvfista.cpu().numpy())
 plt.imshow(np.absolute(image_tvfista_numpy))
