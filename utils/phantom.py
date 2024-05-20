@@ -1,7 +1,7 @@
 import torch
 import numpy as np
 
-def phantomNd(N, E=None):
+def phantom3d(N, E=None):
 
     # define default phantoms:
     def modified_shepp_logan():

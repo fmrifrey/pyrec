@@ -5,10 +5,15 @@ def tvdeblur(A_fwd, A_adj, b, tvtype='L1', niter=100, lam=0.1, L=1, chat=1):
 
     # initialize variables
     P = None
-    cost = []
-    x_set = []
     x = A_adj(b)
     res = A_fwd(x) - b
+    if tvtype == 'iso':
+        cost = [1/2*torch.norm(res)**2 + lam * tvnorm_iso(x)]
+    elif tvtype == 'L1':
+        cost = [1/2*torch.norm(res)**2 + lam * tvnorm_L1(x)]
+    else:
+        raise print("error: invalid tvtype")
+    x_set = [x]
     Y = x.clone()
     t = 1.0
 
@@ -60,7 +65,7 @@ def tvdenoise(v, P=None, tvtype='L1', niter=100, lam=0.1, tol=1e-5):
 
     # initialize variables
     x = v.clone()
-    P = L_adj(x)
+    P = [torch.zeros_like(P_tensor) + 2e-16 for P_tensor in L_adj(x)]
     t = 1.0
     R = [P_tensor.clone() for P_tensor in P]
     D = torch.zeros_like(x)
@@ -108,15 +113,23 @@ def tvdenoise(v, P=None, tvtype='L1', niter=100, lam=0.1, tol=1e-5):
 
 def tvprox_iso(P):
 
-    # proximal mapping divides each P by rsos
-    P_prox = [P_tensor / torch.sqrt(torch.sum(torch.pow(P_tensor2,2) for P_tensor2 in P)) for P_tensor in P]
+    P_prox = []
 
+    # proximal mapping divides each P by rsos
+    rsos = torch.sqrt(torch.sum([P_tensor**2 for P_tensor in P])) # not yet tested (05/19/2024)
+    for P_tensor in P:
+        P_prox = P_prox.append(P_tensor / torch.maximum(rsos,torch.ones_like(torch.abs(P))))
     return P_prox
 
 def tvprox_L1(P):
 
+    P_prox = []
+
     # proximal mapping divides each P by absolute max
-    P_prox = [P_tensor / torch.abs(P_tensor).max() for P_tensor in P]
+    for P_tensor in P:
+        P_temp = P_tensor / torch.maximum(torch.abs(P_tensor),torch.ones_like(torch.abs(P_tensor)))
+        P_temp[torch.where((torch.abs(P_temp)<1) & (torch.abs(P_temp)>0.999))] = 1
+        P_prox.append(P_temp)
     
     return P_prox
 

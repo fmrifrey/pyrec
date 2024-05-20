@@ -10,5 +10,6 @@ dependencies:
   - scikit-image
   - pip
   - numpy
+  - h5py
   - pip:
     - git+https://github.com/mmuckley/torchkbnufft.git
