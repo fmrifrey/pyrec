@@ -6,6 +6,7 @@ dependencies:
   - matplotlib
   - numpy
   - pytorch
+  - cudatoolkit=10.2.89=h713d32c_10
   - torchvision
   - scikit-image
   - pip
