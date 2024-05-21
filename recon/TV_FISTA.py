@@ -1,18 +1,11 @@
 import torch
 import numpy as np
 
-def tvdeblur(A_fwd, A_adj, b, tvtype='L1', niter=100, lam=0.1, L=1, chat=1):
+def tvdeblur(A_fwd, A_adj, b, tvtype='L1', niter=100, lam=0.1, L=1):
 
     # initialize variables
     P = None
     x = A_adj(b)
-    res = A_fwd(x) - b
-    if tvtype == 'iso':
-        cost = [1/2*torch.norm(res)**2 + lam * tvnorm_iso(x)]
-    elif tvtype == 'L1':
-        cost = [1/2*torch.norm(res)**2 + lam * tvnorm_L1(x)]
-    else:
-        raise print("error: invalid tvtype")
     x_set = [x]
     Y = x
     t = 1.0
@@ -38,24 +31,10 @@ def tvdeblur(A_fwd, A_adj, b, tvtype='L1', niter=100, lam=0.1, L=1, chat=1):
         # update Y
         Y = x + (t_old-1)/t * (x - x_old)
 
-        # calculate residual
-        res = A_fwd(x) - b
-
-        # calculate cost
-        if tvtype == 'iso':
-            cost.append(1/2*torch.norm(res)**2 + lam * tvnorm_iso(x))
-        elif tvtype == 'L1':
-            cost.append(1/2*torch.norm(res)**2 + lam * tvnorm_L1(x))
-        else:
-            raise print("error: invalid tvtype")
-
         # save the image
         x_set.append(x)
 
-        if chat:
-            print("TV_FISTA.tvdeblur(): iter %d, cost = %f" % (i, cost[i]))
-
-    return x, cost, x_set
+    return x, x_set
 
 def tvdenoise(v, P=None, tvtype='L1', niter=100, lam=0.1, tol=1e-5):
     
