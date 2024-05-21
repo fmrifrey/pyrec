@@ -21,7 +21,7 @@ def tvdeblur(A_fwd, A_adj, b, tvtype='L1', niter=100, lam=0.1, L=1, chat=1):
     for i in range(niter):
 
         # store old values
-        x_old = x.clone()
+        x_old = x
         t_old = t
 
         # calculate the gradient
@@ -64,18 +64,18 @@ def tvdenoise(v, P=None, tvtype='L1', niter=100, lam=0.1, tol=1e-5):
     ndim = len(v.squeeze().shape)
 
     # initialize variables
-    x = v.clone()
-    P = [torch.zeros_like(P_tensor) + 2e-16 for P_tensor in L_adj(x)]
+    if P is None:
+        P = [torch.zeros_like(P_tensor) for P_tensor in L_adj(v)]
     t = 1.0
-    R = [P_tensor.clone() for P_tensor in P]
-    D = torch.zeros_like(x)
+    R = P
+    D = torch.zeros_like(v)
 
     # loop through FISTA iterations
     for i in range(niter):
 
         # store old values
-        D_old = D.clone()
-        P_old = [P_tensor.clone() for P_tensor in P]
+        D_old = D
+        P_old = P
         t_old = t
        
         # compute gradient of objective function
@@ -118,7 +118,9 @@ def tvprox_iso(P):
     # proximal mapping divides each P by rsos
     rsos = torch.sqrt(torch.sum([P_tensor**2 for P_tensor in P])) # not yet tested (05/19/2024)
     for P_tensor in P:
-        P_prox = P_prox.append(P_tensor / torch.maximum(rsos,torch.ones_like(torch.abs(P))))
+        P_temp = P_tensor / torch.maximum(rsos,torch.ones_like(torch.abs(P_tensor)))
+        P_prox = P_prox.append(P_temp)
+    
     return P_prox
 
 def tvprox_L1(P):
@@ -127,8 +129,8 @@ def tvprox_L1(P):
 
     # proximal mapping divides each P by absolute max
     for P_tensor in P:
-        P_temp = P_tensor / torch.maximum(torch.abs(P_tensor),torch.ones_like(torch.abs(P_tensor)))
-        P_temp[torch.where((torch.abs(P_temp)<1) & (torch.abs(P_temp)>0.999))] = 1
+        P_tensor_abs = torch.abs(P_tensor)
+        P_temp = P_tensor / torch.maximum(P_tensor_abs,torch.ones_like(P_tensor_abs))
         P_prox.append(P_temp)
     
     return P_prox
@@ -158,18 +160,16 @@ def L_fwd(P):
     # get size
     sz = list(P[0].shape)
     sz[0] += 1
-    nd = len(P[0].shape)
-    if nd == 2 and sz[1] == 1:
-        nd = 1
+    ndim = len(P[0].shape)
 
     # initialize image
     x = torch.zeros(sz, dtype=P[0].dtype, device=P[0].device)
 
     # loop through dimensions
-    for dim in range(nd):
+    for dim in range(ndim):
         # create slices for addition and subtraction
-        slices1 = [slice(None)] * nd
-        slices2 = [slice(None)] * nd
+        slices1 = [slice(None)] * ndim
+        slices2 = [slice(None)] * ndim
         slices1[dim] = slice(0, sz[dim] - 1)
         slices2[dim] = slice(1, sz[dim])
 
@@ -182,8 +182,8 @@ def L_fwd(P):
 def L_adj(x):
     
     # get the shape of the input tensor x
-    shape = list(x.shape)
-    ndim = len(shape)
+    sz = list(x.shape)
+    ndim = len(sz)
     
     # initialize list of difference matrices P
     P = []
@@ -191,15 +191,13 @@ def L_adj(x):
     # calculate diffs along each dimension
     for dim in range(ndim):
         # create slices for current and previous elements
-        slice_current = [slice(None)] * ndim
-        slice_prev = [slice(None)] * ndim
-        
-        # set the slice for the current dimension
-        slice_current[dim] = slice(1, shape[dim])
-        slice_prev[dim] = slice(0, shape[dim] - 1)
+        slices1 = [slice(None)] * ndim
+        slices2 = [slice(None)] * ndim
+        slices1[dim] = slice(1, sz[dim])
+        slices2[dim] = slice(0, sz[dim] - 1)
         
         # calculate the differences along the current dimension
-        P_tensor = x[tuple(slice_current)] - x[tuple(slice_prev)]
+        P_tensor = x[tuple(slices2)] - x[tuple(slices1)]
         
         # append the diff tensor to the list
         P.append(P_tensor)
