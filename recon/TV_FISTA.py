@@ -14,7 +14,7 @@ def tvdeblur(A_fwd, A_adj, b, tvtype='L1', niter=100, lam=0.1, L=1, chat=1):
     else:
         raise print("error: invalid tvtype")
     x_set = [x]
-    Y = x.clone()
+    Y = x
     t = 1.0
 
     # loop through FISTA iterations
