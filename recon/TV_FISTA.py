@@ -1,7 +1,7 @@
 import torch
 import numpy as np
 
-def tvdeblur(A_fwd, A_adj, b, tvtype='L1', niter=100, lam=0.1, L=1):
+def tvdeblur(A_fwd, A_adj, b, tvtype='L1', niter=100, lam=0.1, L=1, printitr=0):
 
     # initialize variables
     P = None
@@ -12,6 +12,9 @@ def tvdeblur(A_fwd, A_adj, b, tvtype='L1', niter=100, lam=0.1, L=1):
 
     # loop through FISTA iterations
     for i in range(niter):
+
+        if printitr:
+            print(f"TV_FISTA: iteration {i}")
 
         # store old values
         x_old = x
